@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Sample Site (Before Datadog)</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Roboto, "Segoe UI", sans-serif; padding: 32px; color:#111; background:#fbfbfd; }
+    .box { border:1px solid #e6e6ee; padding:16px; margin:12px 0; border-radius:8px; background:#fff; box-shadow: 0 1px 2px rgba(20,20,50,0.03); }
+    button { margin:6px 6px 6px 0; padding:8px 12px; border-radius:6px; border:1px solid #d0d0e0; background:#f7f8fc; cursor:pointer; }
+    button.primary { background:#2b6cb0; color:white; border-color:#265a9a; }
+    .log { font-family: monospace; white-space: pre-wrap; background:#f3f6ff; padding:12px; border-radius:6px; max-height:220px; overflow:auto; }
+    nav a { margin-right: 12px; cursor:pointer; color:#2b6cb0; text-decoration:underline; }
+    small.gray { color:#666; }
+  </style>
+
+  <!--
+    TEMPAT MENYISIPKAN DATADOG RUM LATER:
+    Saat siap untuk monitoring, hapus komentar dan paste snippet Datadog di bawah ini (atau di <head> sebelum script app.js):
+    <!-- INSERT DATADOG RUM SNIPPET HERE -->
+    Pastikan ganti clientToken & applicationId.
+  -->
+</head>
+<body>
+  <h1>Sample Website — publish dulu, monitoring nanti</h1>
+  <p class="gray">File ini tidak mengandung kode Datadog. Setelah ter-publish, kamu bisa menambahkan snippet RUM di area komentar pada <code>&lt;head&gt;</code>.</p>
+
+  <div class="box">
+    <strong>Navigation (SPA-style)</strong>
+    <nav>
+      <a id="nav-home">Home</a>
+      <a id="nav-about">About</a>
+      <a id="nav-contact">Contact</a>
+    </nav>
+    <div id="page" style="margin-top:12px;">Konten halaman awal</div>
+  </div>
+
+  <div class="box">
+    <strong>Actions</strong>
+    <div>
+      <button id="btn-click">Klik saya (interaction)</button>
+      <button id="btn-fetch">Fetch (sukses)</button>
+      <button id="btn-fetch-error">Fetch (404)</button>
+      <button id="btn-network-error">Fetch (network error)</button>
+      <button id="btn-error" class="primary">Generate JS Error</button>
+      <button id="btn-longtask">Simulate Long Task (~600ms)</button>
+    </div>
+    <div style="margin-top:8px;">
+      <button id="btn-burst">Simulate Burst (auto 50 events)</button>
+      <small class="gray">— gunakan untuk menghasilkan trafik saat demo</small>
+    </div>
+  </div>
+
+  <div class="box">
+    <strong>Logs (client-side)</strong>
+    <div id="log" class="log">ready...</div>
+  </div>
+
+  <script>
+    /* Simple helper logger */
+    const logEl = document.getElementById('log');
+    function log(s){
+      const t = new Date().toISOString() + " — " + s;
+      logEl.textContent = t + "\n" + logEl.textContent;
+      console.log("[sample-site] " + s);
+    }
+
+    /* SPA navigation */
+    function setPage(name) {
+      history.pushState({page:name}, name, '#'+name.toLowerCase());
+      document.getElementById('page').textContent = "Anda berada di halaman: " + name;
+      log('navigated to ' + name);
+      // nanti: Datadog RUM biasanya otomatis menangkap history change jika di-enable
+    }
+    document.getElementById('nav-home').onclick = ()=> setPage('Home');
+    document.getElementById('nav-about').onclick = ()=> setPage('About');
+    document.getElementById('nav-contact').onclick = ()=> setPage('Contact');
+
+    /* Actions */
+    document.getElementById('btn-click').addEventListener('click', ()=>{
+      log('button clicked');
+    });
+
+    // Successful fetch to public API
+    document.getElementById('btn-fetch').addEventListener('click', ()=>{
+      log('starting fetch (success) to jsonplaceholder');
+      fetch('https://jsonplaceholder.typicode.com/posts/1')
+        .then(r => r.json())
+        .then(j => { log('fetch success: got post id ' + j.id); })
+        .catch(err => { log('fetch failed: ' + err); });
+    });
+
+    // Fetch expected 404 (uses httpstat.us)
+    document.getElementById('btn-fetch-error').addEventListener('click', ()=>{
+      log('starting fetch (expected 404)');
+      fetch('https://httpstat.us/404')
+        .then(r => {
+          log('fetch status: ' + r.status);
+          if (!r.ok) throw new Error('status ' + r.status);
+          return r.text();
+        })
+        .catch(err => { log('fetch error: ' + err); });
+    });
+
+    // Network error (invalid domain)
+    document.getElementById('btn-network-error').addEventListener('click', ()=>{
+      log('starting fetch (network error expected)');
+      fetch('https://invalid-subdomain-example-12345.com/endpoint')
+        .then(r => r.text())
+        .then(t => { log('unexpected success: ' + t.slice(0,80)); })
+        .catch(err => { log('network fetch error: ' + err); });
+    });
+
+    // Uncaught JS error to be captured later by RUM
+    document.getElementById('btn-error').addEventListener('click', ()=>{
+      log('about to throw an uncaught JS error');
+      setTimeout(()=> {
+        // deliberate ReferenceError
+        nonExistentFunctionCall();
+      }, 0);
+    });
+
+    // Simulate long main-thread task
+    document.getElementById('btn-longtask').addEventListener('click', ()=>{
+      log('starting long task (~600ms)');
+      const start = Date.now();
+      while (Date.now() - start < 600) { /* busy loop */ }
+      log('long task finished');
+    });
+
+    // Simulate burst of actions (for demo traffic)
+    document.getElementById('btn-burst').addEventListener('click', ()=>{
+      log('starting burst of simulated events (50)');
+      let i = 0;
+      const id = setInterval(()=>{
+        i++;
+        // alternate actions
+        if (i % 5 === 0) {
+          // trigger fetch success every 5th
+          fetch('https://jsonplaceholder.typicode.com/posts/' + ((i % 100) + 1))
+            .then(()=> log('burst fetch ok #' + i))
+            .catch(()=> log('burst fetch err #' + i));
+        } else if (i % 7 === 0) {
+          // occasionally cause a caught error (not uncaught)
+          try { throw new Error('simulated catch error #' + i); }
+          catch(e){ log('caught error in burst: ' + e.message); }
+        } else {
+          // simple click-like log
+          log('burst click-like action #' + i);
+        }
+        if (i >= 50) { clearInterval(id); log('burst finished'); }
+      }, 120);
+    });
+
+    // mark initial load
+    window.addEventListener('load', () => {
+      log('sample site loaded');
+      try { performance.mark('page_loaded_custom'); } catch(e){}
+    });
+
+    // keep history/back working nicely
+    window.addEventListener('popstate', (ev)=> {
+      const p = (ev.state && ev.state.page) || 'Home';
+      document.getElementById('page').textContent = "Anda berada di halaman: " + p;
+      log('popstate to ' + p);
+    });
+  </script>
+</body>
+</html>
