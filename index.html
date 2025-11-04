@@ -14,6 +14,23 @@
     small.gray { color:#666; }
   </style>
 
+import { datadogRum } from '@datadog/browser-rum';
+
+datadogRum.init({
+    applicationId: '1b53925f-523a-470f-a148-b95ac35b5aa2',
+    clientToken: 'pubb2b8cc99a18b70ab2f3cd46df7a1bbc9',
+    // `site` refers to the Datadog site parameter of your organization
+    // see https://docs.datadoghq.com/getting_started/site/
+    site: 'datadoghq.com',
+    service: 'datadog.msi.my.id',
+    env: 'staging',
+    // Specify a version number to identify the deployed version of your application in Datadog
+    // version: '1.0.0',
+    sessionSampleRate: 100,
+    sessionReplaySampleRate: 40,
+    trackBfcacheViews: true,
+    defaultPrivacyLevel: 'mask-user-input',
+});
   <!--
     TEMPAT MENYISIPKAN DATADOG RUM LATER:
     Saat siap untuk monitoring, hapus komentar dan paste snippet Datadog di bawah ini (atau di <head> sebelum script app.js):
@@ -167,3 +184,4 @@
   </script>
 </body>
 </html>
+
